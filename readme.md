@@ -11,3 +11,12 @@ To see the PLL output in console, uncomment printf
         //printf("Estimated frequency: %.2f[Hz], angle: %.2f[deg]\n",ddata.F_est/2/PI,ddata.Theta_est*180/PI);		
     }
 ```
+See the harmonics output in console, uncomment the for loop
+```c
+getHarmonicAmplitudes(&ddata, DATA_LENGTH * CYCLE);
+	/*for (int i=0;i<5;i++)
+	{
+		printf("Harmonics: %d, magnitude: %.3f[V]\n", i+1, ddata.Harmonics[i]);
+	}*/
+    
+```

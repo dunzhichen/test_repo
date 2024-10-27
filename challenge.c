@@ -1,10 +1,13 @@
 #include <stdio.h>
 #include <math.h>
 #include <stdlib.h>
+#include <complex.h>
 
 #define CYCLE 10
 #define DATA_LENGTH 20
 #define PI 3.14159265358979323846f
+
+typedef float complex cplx;
 
 float abc_to_q(float Va, float Vb, float Vc, float theta) {
     return - (2.0f / 3.0f) * (Va * sinf(theta) + Vb * sinf(theta - 2 * PI / 3) + Vc * sinf(theta + 2 * PI / 3));
@@ -31,6 +34,8 @@ float Vc[] = {
            274.14,  311.11,  315.76,  276.27,  216.22
 };
 
+float harmonics[5]; // 1st to 5th harmonics, only calculated for phase A
+
 typedef struct _DDATA{
     float *in_a;
     float *in_b;
@@ -50,6 +55,7 @@ DDATA ddata = {
 .Ts   = 0.001f,
 .Kp   = 1.0f,
 .Ki   = 100.0f,
+.Harmonics = harmonics,
 };
 
 void estimateFrequencyAndTheta(DDATA *d, int dataSize, int idx)
@@ -77,6 +83,41 @@ void estimateFrequencyAndTheta(DDATA *d, int dataSize, int idx)
         }
 }
 
+void getHarmonicAmplitudes(DDATA *d, int dataSize) 
+{
+	// frequency basis for DFT
+	int base_bin_frequency     = (int)(1/d->Ts/(float)(dataSize) + 0.5);
+	
+	// round the fundamental frequency to integer 
+	int fundamental_frequency  = (int)(d->F_est/2/PI + 0.5);
+	
+	// In a full DFT, we calculate the N frequencies. the output of DFT corresponds to the frequencies range 0 : fs/N : (fs - fs/N)
+	// In total, that is N DFT data bin. We can find the data bins for specific frequencies to reduce the amount of calculation
+	
+    int index[5]; 
+	// data bin index for the 1st to 5th harmonics in the DFT result      
+	for (int i = 0; i < 5; i++)
+	{   
+        // requires the fundamental frequency/base frequency = integer!
+		index[i] = fundamental_frequency * (i + 1) / base_bin_frequency + 1;
+	}
+
+	// partial DFT for specific frequencies, i.e., 1st to 5th harmonics
+	for (int k = 0; k < 5; k++)
+		{
+			// placeholder for result of one frequency
+			cplx DFT_result = 0;
+
+			int  i = index[k];
+		 		for (int j = 0; j < dataSize; j++)
+				{   
+					DFT_result += cexp(-I*2*PI*(i-1)*j/(float)dataSize) * d->in_a[j%DATA_LENGTH];
+				}	
+			// save result
+			d->Harmonics[k] = 2.0/(float)dataSize * sqrtf(crealf(DFT_result)*crealf(DFT_result) + cimagf(DFT_result)*cimagf(DFT_result));
+		}
+}
+
 int main()
 {
   
@@ -85,6 +126,14 @@ int main()
         estimateFrequencyAndTheta(&ddata, DATA_LENGTH*CYCLE, i);
         //printf("Estimated frequency: %.2f[Hz], angle: %.2f[deg]\n",ddata.F_est/2/PI,ddata.Theta_est*180/PI);		
     }
+
+    // Fundamental frequency of the / DFT base frequency => integer is required.
+    // f_fundamental / (fs / (DATA_LENGTH * CYCLE))   
+    getHarmonicAmplitudes(&ddata, DATA_LENGTH * CYCLE);
+	/*for (int i=0;i<5;i++)
+	{
+		printf("Harmonics: %d, magnitude: %.3f[V]\n", i+1, ddata.Harmonics[i]);
+	}*/
     
     return 0;
 }
